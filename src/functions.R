@@ -130,7 +130,13 @@ bayes_plot <- function( fit )
            legend.margin = margin(6,6,6,6)) +
     scale_color_manual( values = c("firebrick"))
   
-  ggarrange( p1, p2, p3, nrow = 1)
+  p1 + p2 + p3 +
+    plot_annotation(
+      title   = "Prussian horse kick data",
+      theme   = theme(plot.title = element_text(size = 15, face = "bold"))
+    )
+  
+  #ggarrange( p1, p2, p3, nrow = 1)
   
 }
 

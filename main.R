@@ -3,40 +3,49 @@ rm( list = ls() )
 library( tidyverse )
 library( gridExtra )
 library( ggpubr )
+library(patchwork)
 
 source( "src/functions.R" )
 
 # ------------------------------------------------------------------------------
-# Data load and format
+# Horse kick data: deaths per year, summed across 14 cavalry corps
+# Source: von Bortkiewicz (1898)
 # ------------------------------------------------------------------------------
 
-data_file <- list.files( "data" )
-data_long <- read_csv( paste0("data/", data_file), col_types = cols() ) %>%
-             pivot_longer( -Year, names_to = "Corp", values_to = "Deaths" )
+data_path <- list.files( pattern = ".csv", recursive = T)
+data_raw  <- read.csv( data_path, row.names = 1)
+data_long <- data_raw |> 
+             pivot_longer( everything(), names_to = "Corp", values_to = "Deaths" )
+
+deaths_per_year <- rowSums( data_raw )
+deaths_per_corp <- colSums( data_raw )
 
 # ------------------------------------------------------------------------------
 # Fit Bayesian Poisson Model 
 #
-# Fits Poisson likelihood with conjugate Gamma prior on lambda. 
-# Produces Gamma posterior distribution over lambda.
-# Model fit with  Gamma(1, 1) prior
+# Prior: Gamma(alpha_prior, beta_prior)
+# Posterior: Gamma(alpha_prior + sum(k), beta_prior + n)
+#
+# Change alpha_prior and beta_prior to see effect on posterior
 # ------------------------------------------------------------------------------
 
 # Data 
-y <- data_long %>% pull( Deaths )
+k <- pull( data_long[,"Deaths"] )
 
-# Prior parameters
+# Default prior parameters (change)
 alpha_prior <- 1
 beta_prior  <- 1
 
 # Model fit and summary
-bayes_fit    <- fit_poisson_gamma( y = y, alpha = alpha_prior, beta = beta_prior )
+bayes_fit <- fit_poisson_gamma( y = k, alpha = alpha_prior, beta = beta_prior )
 bayes_summary( fit = bayes_fit )
 
 # Generate outputs to examine posterior and fit
 plots <- bayes_plot( fit = bayes_fit )
 ggsave( plots, file = "figs/bayes_plots.png", units = "cm", height = 7, width = 19 )
 
+
+if(F){
 # ------------------------------------------------------------------------------
 # Maximum Likelihood Estimation 
 # ------------------------------------------------------------------------------
@@ -61,3 +70,4 @@ plot_mle <- data_summary %>%
 
 ggsave( plot_mle, file = "figs/plot_mle.png", units = "cm", width = 10, height = 7)
 
+}
