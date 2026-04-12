@@ -1,2 +1,2 @@
-# poisson_bayes_horse_kicks
+# Prussian Army Horse Kick Deaths
 Code for Bayesian analysis of horse kick data
