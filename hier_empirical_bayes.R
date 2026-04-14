@@ -1,19 +1,13 @@
 library(tidyverse)
 
-# ------------------------------------------------------------------------------
-# Horse kick data: total deaths per corps across 20 years (1875-1894)
-# Source: von Bortkiewicz (1898)
-# ------------------------------------------------------------------------------
-
-deaths_per_corp <- c(16, 16, 12, 12, 8, 11, 17, 12, 7, 13, 15, 25, 24, 8)
 n_corps <- length(deaths_per_corp)
-n_years <- 20
+n_years <- length(deaths_per_year)
 
 # ------------------------------------------------------------------------------
 # Step 1: Estimate hyperparameters via marginal maximum likelihood (Empirical Bayes)
 #
 # Marginalising out lambda_i, the marginal likelihood for each corps is:
-#   k_i ~ NegBinom(alpha, alpha / (alpha + n_years))
+#   k_i ~ NegBinom(alpha, beta / (beta + n_years))
 #
 # We maximise the marginal log-likelihood over (alpha, beta) numerically.
 # Note: beta here is the rate parameter of the Gamma hyperprior.
@@ -56,6 +50,7 @@ cat(sprintf("  Implied prior variance: %.3f\n", alpha_hat / beta_hat^2))
 
 posteriors <- tibble(
   corp        = factor(seq_len(n_corps)),
+  corp_label  = names(deaths_per_corp),
   deaths      = deaths_per_corp,
   mle         = deaths_per_corp / n_years,
   alpha_post  = alpha_hat + deaths_per_corp,
@@ -65,8 +60,16 @@ posteriors <- tibble(
   post_upper  = qgamma(0.975, alpha_post, beta_post)
 )
 
-print(posteriors %>% select(corp, deaths, mle, post_mean, post_lower, post_upper),
+print(posteriors %>% select(corp, corp_name, deaths, mle, post_mean, post_lower, post_upper),
       n = n_corps)
+
+hypers <- tibble(
+  alpha_post = alpha_hat,
+  beta_post = beta_hat,
+  post_mean = alpha_hat / beta_hat,
+  post_lower  = qgamma(0.025, alpha_hat, beta_hat),
+  post_upper  = qgamma(0.975, alpha_hat, beta_hat)
+)
 
 # ------------------------------------------------------------------------------
 # Step 3: Shrinkage plot — MLE vs posterior mean per corps
@@ -149,7 +152,7 @@ ridgeline_df <- posteriors %>%
   reframe(
     corp        = corp,
     deaths      = deaths,
-    corp_label  = paste0("Corps ", corp, " (", deaths, " deaths)"),
+    corp_label  = paste0(corp_label, " (", deaths, " deaths)"),
     lambda      = rgamma(n_samples, shape = alpha_post, rate = beta_post)
   ) %>%
   mutate(corp_label = reorder(corp_label, deaths))
@@ -205,7 +208,7 @@ ppc_df <- posteriors %>%
   reframe(
     corp       = corp,
     deaths     = deaths,
-    corp_label = paste0("Corps ", corp, " (", deaths, " deaths)"),
+    corp_label = paste0(corp_label, " (", deaths, " deaths)"),
     # Posterior predictive: integrate out lambda_i
     # NegBinom with size = alpha_post, prob = beta_post / (beta_post + n_years)
     pred       = rnbinom(n_samples,
@@ -258,9 +261,9 @@ p_ppc <- ppc_df %>%
 
 p_shrinkage + p_ridgeline + p_ppc +
   plot_annotation(
-    title = "Hierarchical Gamma-Poisson model: Prussian horse kick data",
+    title = "Hierarchical Gamma-Poisson model: Empirical Bayes",
     theme = theme(plot.title = element_text(size = 15, face = "bold"))
   ) +
   plot_layout(widths = c(1, 1.2, 1))
 
-ggsave("hierarchical_model.png", width = 18, height = 6, dpi = 300)
+ggsave("figs/eb_hierarchical_model.png", width = 18, height = 6, dpi = 300)

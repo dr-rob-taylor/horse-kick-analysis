@@ -2,23 +2,24 @@ rm( list = ls() )
 
 library( tidyverse )
 library( gridExtra )
-library( ggpubr )
+#library( ggpubr )
 library(patchwork)
 
 source( "src/functions.R" )
+load("data/prussian_data.RData")
 
 # ------------------------------------------------------------------------------
 # Horse kick data: deaths per year, summed across 14 cavalry corps
 # Source: von Bortkiewicz (1898)
 # ------------------------------------------------------------------------------
 
-data_path <- list.files( pattern = ".csv", recursive = T)
-data_raw  <- read.csv( data_path, row.names = 1)
-data_long <- data_raw |> 
-             pivot_longer( everything(), names_to = "Corp", values_to = "Deaths" )
-
-deaths_per_year <- rowSums( data_raw )
-deaths_per_corp <- colSums( data_raw )
+# data_path <- list.files( pattern = ".csv", recursive = T)
+# data_raw  <- read.csv( data_path, row.names = 1)
+# data_long <- data_raw |> 
+#              pivot_longer( everything(), names_to = "Corp", values_to = "Deaths" )
+# 
+# deaths_per_year <- rowSums( data_raw )
+# deaths_per_corp <- colSums( data_raw )
 
 # ------------------------------------------------------------------------------
 # Fit Bayesian Poisson Model 
