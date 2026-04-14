@@ -1,9 +1,10 @@
 rm( list = ls() )
 
 library( tidyverse )
-library( gridExtra )
+#library( gridExtra )
 #library( ggpubr )
 library(patchwork)
+library(ggridges)
 
 source( "R/functions.R" )
 load("data/prussian_data.RData")

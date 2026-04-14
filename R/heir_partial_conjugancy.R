@@ -1,5 +1,5 @@
-library(tidyverse)
-library(patchwork)
+#library(tidyverse)
+#library(patchwork)
 
 n_corps <- length(deaths_per_corp)
 n_years <- length(deaths_per_year)
@@ -112,7 +112,7 @@ p_trace_beta <- samples %>%
 p_joint <- samples %>%
   ggplot(aes(x = alpha, y = beta)) +
   geom_density_2d_filled(alpha = 0.85, bins = 10) +
-  scale_fill_viridis_d(option = "plasma", direction = -1) +
+  scale_fill_viridis_d(option = "plasma", direction = 1) +
   labs(x = expression(alpha), y = expression(beta),
        title = "Joint posterior: alpha vs beta") +
   theme_minimal(base_size = 12) +
@@ -123,7 +123,7 @@ p_trace_alpha + p_trace_beta + p_joint +
                   theme = theme(plot.title = element_text(size = 14,
                                                           face = "bold")))
 
-ggsave("mcmc_diagnostics.png", width = 14, height = 4, dpi = 300)
+ggsave("figs/mcmc_diagnostics.png", width = 14, height = 4, dpi = 300)
 
 # ------------------------------------------------------------------------------
 # Corps-level posteriors: analytically reconstructed for each posterior draw
@@ -149,8 +149,11 @@ corp_posteriors <- map_dfr(seq_len(n_corps), function(i) {
   
   tibble(
     corp       = i,
+    corp_label  = names(deaths_per_corp),
     deaths     = deaths_per_corp[i],
     mle        = deaths_per_corp[i] / n_years,
+    alpha_post = mean(alpha_post),
+    beta_post  = mean(beta_post),
     post_mean  = mean(post_means),
     post_lower = quantile(lambda_draws, 0.025),
     post_upper = quantile(lambda_draws, 0.975)
@@ -158,6 +161,135 @@ corp_posteriors <- map_dfr(seq_len(n_corps), function(i) {
 })
 
 print(corp_posteriors)
+
+# ------------------------------------------------------------------------------
+# Shrinkage plot — MLE vs posterior mean per corps
+# ------------------------------------------------------------------------------
+
+grand_mean <- sum(deaths_per_corp) / (n_corps * n_years)
+
+p_shrinkage <- corp_posteriors %>%
+  ggplot(aes(x = mle, y = post_mean)) +
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dashed", colour = "grey60", linewidth = 0.6) +
+  geom_hline(yintercept = mean(samples$alpha) / mean(samples$beta),
+             linetype = "dotted", colour = "steelblue", linewidth = 0.6) +
+  geom_segment(aes(xend = mle, yend = mle),
+               colour = "grey70", linewidth = 0.4) +
+  geom_point(size = 3, colour = "steelblue") +
+  annotate("text", x = 0.42, y = mean(samples$alpha) / mean(samples$beta) + 0.025,
+           label = "Prior mean", colour = "steelblue", size = 3.5, hjust = 0) +
+  labs(
+    x     = "MLE (deaths / 20 years)",
+    y     = "Posterior mean",
+    subtitle = "Shrinkage plot"
+  ) +
+  theme_minimal(base_size = 13)
+
+
+# ------------------------------------------------------------------------------
+# Ridgeline plot: posterior distributions per corps, ordered by deaths
+# ------------------------------------------------------------------------------
+
+# Sample from each corps' posterior for the ridgeline
+set.seed(42)
+n_samples <- 5000
+
+ridgeline_df <- corp_posteriors %>%
+  rowwise() %>%
+  reframe(
+    corp        = corp,
+    deaths      = deaths,
+    corp_label  = paste0(corp_label, " (", deaths, " deaths)"),
+    lambda      = rgamma(n_samples, shape = alpha_post, rate = beta_post)
+  ) %>%
+  mutate(corp_label = reorder(corp_label, deaths))
+
+p_ridgeline <- ridgeline_df %>%
+  ggplot(aes(x = lambda, y = corp_label, fill = deaths)) +
+  geom_density_ridges(
+    scale         = 1.8,
+    rel_min_height = 0.01,
+    colour        = "white",
+    linewidth     = 0.4,
+    alpha         = 0.85
+  ) +
+  geom_vline(xintercept = mean(samples$alpha) / mean(samples$beta),
+             linetype = "dashed", colour = "grey30", linewidth = 0.6) +
+  annotate("text", x = mean(samples$alpha) / mean(samples$beta) + 0.03, y = 1.5,
+           label = "Prior mean", colour = "grey30", size = 3.2, hjust = 0) +
+  scale_fill_viridis_c(option = "plasma", name = "Deaths", direction = -1) +
+  scale_x_continuous(limits = c(0, 2.5), breaks = seq(0, 2.4, by = 0.4)) +
+  labs(
+    x     = expression(lambda[i]),
+    y     = NULL,
+    subtitle = "Corps-level posterior distributions",
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y     = element_text(size = 9),
+    legend.position = "right",
+    panel.grid.minor = element_blank()
+  )
+
+# ------------------------------------------------------------------------------
+# Posterior predictive check: observed vs. predicted deaths per corps
+# ------------------------------------------------------------------------------
+
+set.seed(42)
+n_samples <- 10000
+
+ppc_df <- corp_posteriors %>%
+  rowwise() %>%
+  reframe(
+    corp       = corp,
+    deaths     = deaths,
+    corp_label = paste0(corp_label, " (", deaths, " deaths)"),
+    # Posterior predictive: integrate out lambda_i
+    # NegBinom with size = alpha_post, prob = beta_post / (beta_post + n_years)
+    pred       = rnbinom(n_samples,
+                         size = alpha_post,
+                         prob = beta_post / (beta_post + n_years))
+  ) %>%
+  group_by(corp, deaths, corp_label) %>%
+  summarise(
+    pred_mean  = mean(pred),
+    pred_lower = quantile(pred, 0.025),
+    pred_upper = quantile(pred, 0.975),
+    .groups    = "drop"
+  ) %>%
+  mutate(corp_label = reorder(corp_label, deaths))
+
+p_ppc <- ppc_df %>%
+  ggplot(aes(y = corp_label)) +
+  geom_linerange(
+    aes(xmin = pred_lower, xmax = pred_upper, colour = deaths),
+    linewidth = 1.2, alpha = 0.7
+  ) +
+  geom_point(
+    aes(x = pred_mean, colour = deaths),
+    size = 3
+  ) +
+  geom_point(
+    aes(x = deaths),
+    shape = 4, size = 3, stroke = 1.2, colour = "grey20"
+  ) +
+  geom_vline(xintercept = mean(deaths_per_corp),
+             linetype = "dashed", colour = "grey50", linewidth = 0.5) +
+  scale_colour_viridis_c(option = "plasma", name = "Deaths", direction = -1) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +
+  labs(
+    x     = "Total deaths (20 years)",
+    y     = NULL,
+    subtitle = "Posterior predictive check",
+    caption = "Dot = posterior predictive mean | Bar = 95% interval | X = observed"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y      = element_text(size = 9),
+    legend.position  = "none",
+    panel.grid.minor = element_blank()
+  )
 
 # ------------------------------------------------------------------------------
 # Compare empirical Bayes vs fully Bayesian posterior means
@@ -183,6 +315,20 @@ eb_posteriors <- tibble(
   mle       = deaths_per_corp / n_years,
   post_mean = (alpha_eb + deaths_per_corp) / (beta_eb + n_years)
 )
+
+# ------------------------------------------------------------------------------
+# Three-panel combined figure
+# ------------------------------------------------------------------------------
+
+p_shrinkage + p_ridgeline + p_ppc +
+  plot_annotation(
+    title = "Hierarchical Gamma-Poisson model: Partially Conjugate Bayes",
+    theme = theme(plot.title = element_text(size = 15, face = "bold"))
+  ) +
+  plot_layout(widths = c(1, 1.2, 1))
+
+ggsave("figs/pcb_hierarchical_model.png", width = 18, height = 6, dpi = 300)
+
 
 # ------------------------------------------------------------------------------
 # Shrinkage comparison: Empirical Bayes vs partially conjugate Bayes

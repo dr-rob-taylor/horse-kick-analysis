@@ -1,4 +1,4 @@
-library(tidyverse)
+#library(tidyverse)
 
 n_corps <- length(deaths_per_corp)
 n_years <- length(deaths_per_year)
@@ -127,7 +127,7 @@ p_densities <- density_df %>%
 # Step 5: Combine and save
 # ------------------------------------------------------------------------------
 
-library(patchwork)
+#library(patchwork)
 
 p_shrinkage + p_densities +
   plot_annotation(
@@ -137,7 +137,7 @@ p_shrinkage + p_densities +
 
 ggsave("hierarchical_model.png", width = 13, height = 5, dpi = 300)
 
-library(ggridges)
+#library(ggridges)
 
 # ------------------------------------------------------------------------------
 # Ridgeline plot: posterior distributions per corps, ordered by deaths
