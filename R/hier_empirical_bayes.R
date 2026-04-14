@@ -267,3 +267,11 @@ p_shrinkage + p_ridgeline + p_ppc +
   plot_layout(widths = c(1, 1.2, 1))
 
 ggsave("figs/eb_hierarchical_model.png", width = 18, height = 6, dpi = 300)
+
+# ------------------------------------------------------------------------------
+# Analysis Output
+# ------------------------------------------------------------------------------
+posteriors_eb <- posteriors
+hypers_eb <- hypers
+
+save(posteriors_eb, hypers_eb, file = "out/eb_output.RData")

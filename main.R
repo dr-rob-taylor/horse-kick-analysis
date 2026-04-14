@@ -5,7 +5,7 @@ library( gridExtra )
 #library( ggpubr )
 library(patchwork)
 
-source( "src/functions.R" )
+source( "R/functions.R" )
 load("data/prussian_data.RData")
 
 # ------------------------------------------------------------------------------
